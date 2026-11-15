@@ -306,9 +306,57 @@ gcc -std=c11 -Wall -Wextra -Wpedantic program.c -lncurses -o betflip
 ```
 
 В `game.c` заранее подключены `ncurses.h`, `stdbool.h`, `stdio.h`, `string.h` и `time.h`.
-До заголовков определён `_POSIX_C_SOURCE 200809L`, чтобы в Linux была доступна декларация `clock_gettime`.
+Для будущего таймера на Linux при необходимости определим `_POSIX_C_SOURCE 200809L` до заголовков.
 Пока исходник называется `game.c`, в команде сборки выше нужно использовать это имя вместо `program.c`.
-На обычном Windows эта команда сама по себе среду ncurses не создаёт; способ запуска определим отдельно.
+Для Windows используем MSYS2 и отдельную команду сборки, описанную ниже.
+
+### Сборка на Windows без WSL
+
+Используем [MSYS2](https://www.msys2.org/) в `C:\msys64` и его среду UCRT64.
+После установки MSYS2 в терминале **MSYS2 UCRT64** обновляем пакеты:
+
+```sh
+pacman -Syu
+```
+
+Если обновление закрывает терминал, открываем UCRT64 заново и повторяем команду.
+Затем устанавливаем компилятор и [ncurses для UCRT64](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-ncurses):
+
+```sh
+pacman -S --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-ncurses
+```
+
+Из PowerShell в папке проекта можно собрать и запустить текущий `game.c`:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Run
+```
+
+Без `-Run` скрипт только собирает `betflip.exe`. `Bypass` действует только для этого процесса PowerShell.
+Если MSYS2 установлен в другом месте, передаём скрипту `-MsysRoot 'D:\msys64'`.
+Скрипт использует компилятор MSYS2 и временно добавляет его DLL в путь поиска на время запуска.
+Также он задаёт `TERMINFO` — путь к базе описаний терминалов ncurses.
+Текущая заготовка выводит `Hello, world!`; игровой цикл ещё не реализован.
+
+Эквивалентная ручная сборка в терминале **MSYS2 UCRT64**:
+
+```sh
+cd /c/Users/roma7/Desktop/ZAP/ps4
+gcc -std=c11 -Wall -Wextra -Wpedantic game.c -I/ucrt64/include/ncurses -lncursesw -o betflip.exe
+export TERMINFO=C:/msys64/ucrt64/lib/terminfo
+./betflip.exe
+```
+
+Для VS Code локально настроены компилятор и путь к заголовкам, а также задачи:
+
+- `Ctrl+Shift+B` — **Betflip: build**, сборка.
+- Команда **Tasks: Run Task** → **Betflip: build and run** — сборка и запуск.
+
+Настройки есть для открытия папки `ZAP` и отдельно `ps4`.
+Папки `.vscode` локальные и не отправляются в Git по действующему `.gitignore`.
+На другом ПК для подсказок C/C++ нужно выбрать компилятор `C:/msys64/ucrt64/bin/gcc.exe`
+и добавить `C:/msys64/ucrt64/include/ncurses` в **Include path**.
+После настройки терминала VS Code открываем новую вкладку терминала, чтобы обновился поиск DLL.
 
 ## 11. Что проверяем вручную
 
@@ -359,6 +407,7 @@ gcc -std=c11 -Wall -Wextra -Wpedantic program.c -lncurses -o betflip
 - Локальная папка подключена к существующему GitHub-репозиторию `Sw1ziy/Game-on-C`.
 - Рабочий план перенесён в `README.md`; отдельный `GAME_PLAN.md` удалён.
 - В `game.c` добавлены заголовки для терминала, булевых значений, строк, ввода/вывода и времени.
+- Для Windows подготовлены MSYS2 UCRT64, скрипт `build.ps1` и локальные настройки VS Code.
 
 ## Автор
 
