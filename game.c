@@ -72,3 +72,8 @@ int main(void) {
     puts("ncurses test finished.");
     return 0;
 }
+
+/*
+ * RU: Это тестовый код для проверки ncurses, а не готовая игра «Бетфлип».
+ * EN: This is test code for checking ncurses, not the finished Betflip game.
+ */

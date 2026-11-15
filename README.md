@@ -76,7 +76,7 @@ GitHub-репозиторий: https://github.com/Sw1ziy/Game-on-C, основн
 
 ```text
 ZAP/
-├── README                 # Группа, например GROUP : C1
+├── README
 └── ps4/
     ├── program.c          # Вся реализация игры
     ├── documentation.pdf  # Итоговая документация
