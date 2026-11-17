@@ -126,3 +126,5 @@ int main(void) {
     endwin();
     return 0;
 }
+
+//privet
