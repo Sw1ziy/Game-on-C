@@ -100,7 +100,7 @@ int move_player_y(int y, int gravity){
 int main(void) {
     if (initscr() == NULL) return 1;
 
-    load_start_screan();
+    load_start_screen();
 
     cbreak();
     noecho();

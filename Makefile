@@ -15,7 +15,7 @@ TARGET = betflip
 endif
 
 .PHONY: all run clean
-.DELETE_ON_ERROR:
+# Keep partial build output on error; deleting files requires explicit approval.
 
 all: $(TARGET)
 
