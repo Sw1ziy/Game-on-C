@@ -111,14 +111,29 @@ int main(void) {
     int x = 1;
     int y = LINES - 2;
     int gravity = 1;
+    char bat = 'M';
 
     while (key != 'q' && key != 'Q' && key != 27){
         erase();
         box(stdscr, 0, 0);
-        mvaddch(y, x, 'M');
+        mvaddstr(0, 2, "A/D: Move   Space: Flip   Q/Esc: Quit  R: Reset");
+
+        if(key == 'r' || key == 'R'){
+            x = 1;
+            y = LINES - 2;
+            gravity = 1;
+        }
+
         x = move_player_x(x, key);
         y = move_player_y(y, gravity);
         gravity = flip_gravity(gravity, key, y);
+
+        if(y == 1){
+            bat = 'W';
+        } else if(y == LINES - 2){
+            bat = 'M';
+        }
+        mvaddch(y, x, bat);
         refresh();
         key = getch();
     }
