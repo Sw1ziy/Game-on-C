@@ -10,61 +10,52 @@ typedef struct {
     bool quit;
 }GameInput;
 
+void draw_game(int x, int y, char bat);
 void load_start_screen(void);
+void setup_controls(void);
 int move_player_x(int x, int key);
 int move_player_y(int y, int gravity);
 int flip_gravity(int gravity, int key, int y);
 int read_move_key(int key);
+
 GameInput read_input_key();
-
-
-
 
 int main(void) {
     if (initscr() == NULL) return 1;
 
     curs_set(0);
     load_start_screen();
+    setup_controls();
 
-    cbreak();
-    noecho();
-    keypad(stdscr, TRUE);
-    timeout(0);
-
-    int key = 0;
     int x = 1;
     int y = LINES - 2;
     int gravity = 1;
     char bat = 'M';
 
-    while (key != 'q' && key != 'Q' && key != 27){
-        erase();
-        box(stdscr, 0, 0);
-        mvaddstr(0, 2, "A/D or </> : Move   Space: Flip   Q/Esc: Quit  R: Reset");
+    while (true){
+        GameInput input = read_input_key();
+        
+        if(input.quit){
+            break;
+        }
 
-        if(key == 'r' || key == 'R'){
+        if(input.reset){
             x = 1;
             y = LINES - 2;
             gravity = 1;
         }
 
-        int move_key = read_move_key(key);
-
-
-        x = move_player_x(x, move_key);
-        gravity = flip_gravity(gravity, key, y);
+        x = move_player_x(x, input.move_key);
+        gravity = flip_gravity(gravity, input.flip_key, y);
         y = move_player_y(y, gravity);
-
 
         if(y == 1){
             bat = 'W';
         } else if(y == LINES - 2){
             bat = 'M';
         }
-        mvaddch(y, x, bat);
-        refresh();
+        draw_game(x, y, bat);
         napms(50);
-        key = getch();
     }
 
     endwin();
@@ -84,7 +75,23 @@ const char *logo =
     "|____|_____|/ |____|  |____|  |____|          |____|       |____|_____|/|____||____|\n"
     "  \\(    )/      \\(      )/      \\(              )/           \\(    )/     \\(    \\(\n"
     "   '    '        '      '        '              '             '    '       '     '\n";
-        
+
+void setup_controls(void){
+    cbreak();
+    noecho();
+    keypad(stdscr, TRUE);
+    timeout(0);
+}
+
+void draw_game(int x, int y, char bat){
+    erase();
+    box(stdscr, 0, 0);
+    mvaddstr(0, 2, "A/D or </> : Move   Space: Flip   Q/Esc: Quit  R: Reset");
+    mvaddch(1, COLS / 2, '*');
+    mvaddch(y, x, bat);
+    refresh();
+}
+
 void load_start_screen(void){
 
     int logo_x = (COLS - 91) / 2;
@@ -190,6 +197,33 @@ int read_move_key(int key){
 }
 
 GameInput read_input_key(void){
+    GameInput input;
 
+    input.move_key = ERR;
+    input.flip_key = ERR;
+    input.reset = false;
+    input.quit = false;
+
+    int key = getch();
+
+    while(key != ERR){
+        int direction = read_move_key(key);
+
+        if(direction != ERR){
+            input.move_key = direction;
+        }
+        if(key == ' '){
+            input.flip_key = key;
+        }
+        if(key == 'r' || key == 'R'){
+            input.reset = key;
+        }
+        if(key == 'q' || key == 'Q' || key == 27){
+            input.quit = true;
+        }
+
+        key = getch();
+    }
     
+    return input;
 }
