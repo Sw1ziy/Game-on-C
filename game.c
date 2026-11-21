@@ -3,10 +3,22 @@
 #include <stdio.h>
 #include <string.h>
 
+typedef struct {
+    int move_key;
+    int flip_key;
+    bool reset;
+    bool quit;
+}GameInput;
+
 void load_start_screen(void);
 int move_player_x(int x, int key);
 int move_player_y(int y, int gravity);
 int flip_gravity(int gravity, int key, int y);
+int read_move_key(int key);
+GameInput read_input_key();
+
+
+
 
 int main(void) {
     if (initscr() == NULL) return 1;
@@ -17,6 +29,7 @@ int main(void) {
     cbreak();
     noecho();
     keypad(stdscr, TRUE);
+    timeout(0);
 
     int key = 0;
     int x = 1;
@@ -35,9 +48,13 @@ int main(void) {
             gravity = 1;
         }
 
-        x = move_player_x(x, key);
-        y = move_player_y(y, gravity);
+        int move_key = read_move_key(key);
+
+
+        x = move_player_x(x, move_key);
         gravity = flip_gravity(gravity, key, y);
+        y = move_player_y(y, gravity);
+
 
         if(y == 1){
             bat = 'W';
@@ -46,6 +63,7 @@ int main(void) {
         }
         mvaddch(y, x, bat);
         refresh();
+        napms(50);
         key = getch();
     }
 
@@ -156,4 +174,22 @@ int move_player_y(int y, int gravity){
         y = jump;
     }
     return y;
+}
+
+int read_move_key(int key){
+    if(key == 'a' ||
+        key == 'A' ||
+        key == 'd' ||
+        key == 'D' ||
+        key == KEY_LEFT ||
+        key == KEY_RIGHT){
+        
+        return key;
+    }
+    return ERR;
+}
+
+GameInput read_input_key(void){
+
+    
 }
