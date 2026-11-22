@@ -10,15 +10,35 @@ typedef struct {
     bool quit;
 }GameInput;
 
-void draw_game(int x, int y, char bat);
+typedef struct {
+    int start_x;
+    int start_y;
+    int exit_x;
+    int exit_y;
+}Levels;
+
+typedef struct{
+    int x;
+    int y;
+    bool collected;
+}Moth;
+
+void start_game(void);
+
+void draw_game(int x, int y, char bat, int level, int exit_x, int exit_y, const Moth moth[], int collected);
+void win_screen(int level);
 void load_start_screen(void);
 void setup_controls(void);
+
 int move_player_x(int x, int key);
 int move_player_y(int y, int gravity);
 int flip_gravity(int gravity, int key, int y);
+
 int read_move_key(int key);
 
-GameInput read_input_key();
+int moth_collected(Moth moth[], int x, int y);
+GameInput read_input_key(void);
+Levels read_level(int number);
 
 int main(void) {
     if (initscr() == NULL) return 1;
@@ -27,37 +47,8 @@ int main(void) {
     load_start_screen();
     setup_controls();
 
-    int x = 1;
-    int y = LINES - 2;
-    int gravity = 1;
-    char bat = 'M';
-
-    while (true){
-        GameInput input = read_input_key();
-        
-        if(input.quit){
-            break;
-        }
-
-        if(input.reset){
-            x = 1;
-            y = LINES - 2;
-            gravity = 1;
-        }
-
-        x = move_player_x(x, input.move_key);
-        gravity = flip_gravity(gravity, input.flip_key, y);
-        y = move_player_y(y, gravity);
-
-        if(y == 1){
-            bat = 'W';
-        } else if(y == LINES - 2){
-            bat = 'M';
-        }
-        draw_game(x, y, bat);
-        napms(50);
-    }
-
+    start_game();
+    
     endwin();
     return 0;
 }
@@ -76,6 +67,93 @@ const char *logo =
     "  \\(    )/      \\(      )/      \\(              )/           \\(    )/     \\(    \\(\n"
     "   '    '        '      '        '              '             '    '       '     '\n";
 
+void start_game(void){
+    
+    int level = 1;
+    
+    Levels current_level = read_level(level);
+
+    int x = current_level.start_x;
+    int y = current_level.start_y;
+
+    int gravity = 1;
+    
+    char bat = 'M';
+
+    Moth moth[3];
+    int collected = 0;
+
+    moth[0].x = COLS / 4;
+    moth[0].y = LINES - 2;
+    moth[0].collected = false;
+
+    moth[1].x = COLS / 2;
+    moth[1].y = 1;
+    moth[1].collected = false;
+
+    moth[2].x = COLS * 3 / 4;
+    moth[2].y = 1;
+    moth[2].collected = false;
+
+    while (true){
+        GameInput input = read_input_key();
+        
+        if(input.quit){
+            break;
+        }
+
+        if(input.reset){
+            x = current_level.start_x;
+            y = current_level.start_y;
+            if(y == 1){
+                gravity = -1;
+            } else {
+                gravity = 1;
+            }
+            if(level == 1){
+                collected = 0;
+                for(int i = 0; i < 3; i++){
+                    moth[i].collected = false;
+                }
+            }
+        }
+
+        x = move_player_x(x, input.move_key);
+        gravity = flip_gravity(gravity, input.flip_key, y);
+        y = move_player_y(y, gravity);
+
+        if(level == 1){
+            collected += moth_collected(moth, x, y);
+        }
+
+        if(x == current_level.exit_x && y == current_level.exit_y){
+            win_screen(level);
+            if(level == 3){
+                break;
+            }
+
+            level++;
+            current_level = read_level(level);
+            x = current_level.start_x;
+            y = current_level.start_y;
+
+            if(y == 1){
+                gravity = -1;
+            } else {
+                gravity = 1;
+            }
+        }
+
+        if(y == 1){
+            bat = 'W';
+        } else if(y == LINES - 2){
+            bat = 'M';
+        }
+        draw_game(x, y, bat, level, current_level.exit_x, current_level.exit_y, moth, collected);
+        napms(50);
+    }
+}    
+    
 void setup_controls(void){
     cbreak();
     noecho();
@@ -83,13 +161,50 @@ void setup_controls(void){
     timeout(0);
 }
 
-void draw_game(int x, int y, char bat){
+void draw_game(int x, int y, char bat, int level, int exit_x, int exit_y, const Moth moth[], int collected){
     erase();
     box(stdscr, 0, 0);
     mvaddstr(0, 2, "A/D or </> : Move   Space: Flip   Q/Esc: Quit  R: Reset");
-    mvaddch(1, COLS / 2, '*');
+    mvprintw(LINES - 1, 2, "Level %d/3", level);
+    if(level == 1){
+        printw(" | Moths %d/3", collected);
+        for(int i = 0; i < 3; i++){
+            if(!moth[i].collected){
+                mvaddch(moth[i].y, moth[i].x, '*');
+            }
+        }
+    }
+    mvaddstr(exit_y, exit_x - 1, "[>]");
     mvaddch(y, x, bat);
     refresh();
+}
+
+void win_screen(int level) {
+    const char *message = "Level Complete!";
+    const char *prompt = "Press Enter";
+
+    if (level == 3) {
+        message = "You Win!";
+        prompt = "Press Enter to exit";
+    }
+
+    int message_x = (COLS - (int)strlen(message)) / 2;
+    int prompt_x = (COLS - (int)strlen(prompt)) / 2;
+
+    erase();
+    mvaddstr(LINES / 2, message_x, message);
+    mvaddstr(LINES / 2 + 1, prompt_x, prompt);
+    refresh();
+
+    timeout(-1);
+
+    int key = getch();
+
+    while (key != '\n' && key != '\r' && key != KEY_ENTER && key != ERR){
+        key = getch();
+    }
+
+    timeout(0);
 }
 
 void load_start_screen(void){
@@ -194,6 +309,44 @@ int read_move_key(int key){
         return key;
     }
     return ERR;
+}
+
+int moth_collected(Moth moth[], int x, int y){
+    int picked_up = 0;
+
+    for(int i = 0; i < 3; i++){
+        if(!moth[i].collected && moth[i].x == x && moth[i].y == y){
+            moth[i].collected = true;
+            picked_up++;
+        }
+    }
+
+    return picked_up;
+}
+
+Levels read_level(int number){
+    Levels level;
+
+    level.start_x = 1;
+    level.start_y = LINES - 2;
+    level.exit_x = COLS / 2;
+    level.exit_y = LINES - 2;
+
+    if(number == 1){
+        level.exit_x = COLS - 3;
+    }
+
+    if(number == 2){
+        level.exit_x = COLS - 3;
+        level.exit_y = 1;
+    }
+
+    if(number == 3){
+        level.start_y = 1;
+        level.exit_x = COLS - 3;
+    }
+
+    return level;
 }
 
 GameInput read_input_key(void){
