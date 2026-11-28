@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#define MAX_MOTHS 64
+
 typedef struct {
     int move_key;
     int flip_key;
@@ -11,35 +13,43 @@ typedef struct {
     bool pause;
 }GameInput;
 
-typedef struct {
-    int start_x;
-    int start_y;
-    int exit_x;
-    int exit_y;
-}Levels;
-
 typedef struct{
     int x;
     int y;
     bool collected;
 }Moth;
 
+typedef struct {
+    int start_x;
+    int start_y;
+    int exit_x;
+    int exit_y;
+
+    char map[64][128];
+    int map_rows;
+    int map_cols;
+
+    Moth moth[MAX_MOTHS];
+    int moth_count;
+}Levels;
+
 void start_game(void);
-void draw_game(int x, int y, char bat, int level, int exit_x, int exit_y, const Moth moth[], int collected);
+void draw_game(int x, int y, char bat, int level, int collected, const Levels *data);
 void win_screen(int level, bool has_next_level);
 void about_screen(void);
 void setup_controls(void);
 
-int move_player_x(int x, int key);
-int move_player_y(int y, int gravity);
-int flip_gravity(int gravity, int key, int y);
+int move_player_x(int x, int y, int key, const Levels *data);
+int move_player_y(int x, int y, int gravity, const Levels *data);
+int flip_gravity(int gravity, int key, int x, int y, const Levels *data);
 int read_move_key(int key);
 
+bool is_wall(const Levels *data, int x, int y);
 bool load_start_screen(void);
 bool pause_screen(void);
 bool secret_level(int number, int total_collected);
 
-int moth_collected(Moth moth[], int x, int y);
+int moth_collected(Moth moth[], int moth_count, int x, int y);
 GameInput read_input_key(void);
 Levels read_level(int number);
 
@@ -52,12 +62,12 @@ int main(void) {
     if (load_start_screen()) {
         start_game();
     }
-    
+
     endwin();
     return 0;
 }
 
-bool load_start_screen(void){
+bool load_start_screen(void) {
     const char *logo =
         "      _____          ____   _________________       _____   ____         ____      _____\n"
         " ___|\\     \\    ____|\\   \\ /                 \\ ____|\\    \\ |    |       |    | ___|\\    \\\n"
@@ -97,7 +107,6 @@ bool load_start_screen(void){
 
     mvaddch(bar_y, bar_x, '[');
     mvaddch(bar_y, bar_x + bar_width + 1, ']');
-    
 
     for(int percent = 0; percent <= 100; percent++){
         int filled = bar_width * percent / 100;
@@ -128,11 +137,6 @@ bool load_start_screen(void){
         napms(250);
     }
 
-    for (int i = 0; i < bar_width + 2; i++) {
-        mvaddch(bar_y, bar_x + i, ' ');
-    }
-    mvaddstr(bar_y + 1, percent_x, "    ");
-
     int selected = 0;
     int key;
 
@@ -145,7 +149,7 @@ bool load_start_screen(void){
         mvaddstr(menu_y, menu_x + 2, "START");
         mvaddstr(menu_y + 1, menu_x + 2, "ABOUT GAME");
         mvaddstr(menu_y + 2, menu_x + 2, "EXIT");
-        mvaddstr(LINES - 1, 0, "Beta 1.8.1");
+        mvaddstr(LINES - 1, 0, "Version: Beta 1.8.2");
         mvaddch(menu_y + selected, menu_x, '>');
         refresh();
 
@@ -170,15 +174,20 @@ bool load_start_screen(void){
 }
 
 void about_screen(void) {
+    const char *description = "Help the bat escape the cave and collect moths.";
     int row = LINES / 2 - 4;
+    int col = (COLS - (int)strlen(description)) / 2;
+    if (col < 0) {
+        col = 0;
+    }
 
     erase();
     mvaddstr(row, (COLS - 10) / 2, "ABOUT GAME");
-    mvaddstr(row + 2, 2, "Help the bat escape the cave and collect moths.");
-    mvaddstr(row + 3, 2, "A/D or Left/Right: Move");
-    mvaddstr(row + 4, 2, "Space: Flip gravity at a surface");
-    mvaddstr(row + 5, 2, "P: Pause   R: Reset   Q/Esc: Quit during play");
-    mvaddstr(row + 7, 2, "Esc: Back to menu");
+    mvaddstr(row + 2, col, description);
+    mvaddstr(row + 3, col, "A/D or Left/Right: Move");
+    mvaddstr(row + 4, col, "Space: Flip gravity at a surface");
+    mvaddstr(row + 5, col, "P: Pause   R: Reset   Q/Esc: Quit during play");
+    mvaddstr(row + 7, col, "Esc: Back to menu");
     refresh();
 
     int key = getch();
@@ -207,23 +216,19 @@ void start_game(void){
     
     char bat = 'M';
 
-    Moth moth[3];
     int collected = 0;
     int total_collected = 0;
 
-    moth[0].x = COLS / 4;
-    moth[0].y = LINES - 2;
-    moth[0].collected = false;
-
-    moth[1].x = COLS / 2;
-    moth[1].y = 1;
-    moth[1].collected = false;
-
-    moth[2].x = COLS * 3 / 4;
-    moth[2].y = 1;
-    moth[2].collected = false;
-
     while (true){
+        if (current_level.map_rows == 0) {
+            erase();
+            mvprintw(0, 0, "Cannot load level%d.txt. Press any key to exit.", level);
+            refresh();
+            timeout(-1);
+            getch();
+            return;
+        }
+
         GameInput input = read_input_key();
         
         if(input.quit){
@@ -245,21 +250,17 @@ void start_game(void){
             } else {
                 gravity = 1;
             }
-            if(level == 1){
-                collected = 0;
-                for(int i = 0; i < 3; i++){
-                    moth[i].collected = false;
-                }
+            collected = 0;
+            for (int i = 0; i < current_level.moth_count; i++) {
+                current_level.moth[i].collected = false;
             }
         }
 
-        x = move_player_x(x, input.move_key);
-        gravity = flip_gravity(gravity, input.flip_key, y);
-        y = move_player_y(y, gravity);
+        x = move_player_x(x, y, input.move_key, &current_level);
+        gravity = flip_gravity(gravity, input.flip_key, x, y, &current_level);
+        y = move_player_y(x, y, gravity, &current_level);
 
-        if(level == 1){
-            collected += moth_collected(moth, x, y);
-        }
+        collected += moth_collected(current_level.moth, current_level.moth_count, x, y);
 
         if(x == current_level.exit_x && y == current_level.exit_y){
             total_collected += collected;
@@ -277,40 +278,100 @@ void start_game(void){
 
             if(y == 1){
                 gravity = -1;
+                bat = 'W';
             } else {
                 gravity = 1;
+                bat = 'M';
             }
+            continue;
         }
 
-        if(y == 1){
-            bat = 'W';
-        } else if(y == LINES - 2){
-            bat = 'M';
+        if (is_wall(&current_level, x, y + gravity)) {
+            if (gravity < 0) {
+                bat = 'W';
+            } else {
+                bat = 'M';
+            }
         }
-        draw_game(x, y, bat, level, current_level.exit_x, current_level.exit_y, moth, collected);
+        draw_game(x, y, bat, level, collected, &current_level);
         napms(50);
     }
 }    
 
-void draw_game(int x, int y, char bat, int level, int exit_x, int exit_y, const Moth moth[], int collected){
+void draw_game(int x, int y, char bat, int level, int collected, const Levels *data) {
     erase();
-    box(stdscr, 0, 0);
-    mvaddstr(0, 2, "A/D or </> : Move   Space: Flip   Q/Esc: Quit  R: Reset  P: Pause");
-    if (level == 4) {
-        mvaddstr(LINES - 1, 2, "Secret Level");
-    } else {
-        mvprintw(LINES - 1, 2, "Level %d/3", level);
+    if (LINES < 2 || COLS < 2) {
+        refresh();
+        return;
     }
-    if(level == 1){
-        printw(" | Moths %d/3", collected);
-        for(int i = 0; i < 3; i++){
-            if(!moth[i].collected){
-                mvaddch(moth[i].y, moth[i].x, '*');
+
+    int rows = data->map_rows;
+    if (rows > LINES) {
+        rows = LINES - 1;
+    }
+    int cols = data->map_cols;
+    if (cols > COLS) {
+        cols = COLS;
+    }
+
+    int top = y - rows / 2;
+    if (top < 0) {
+        top = 0;
+    }
+    if (top > data->map_rows - rows) {
+        top = data->map_rows - rows;
+    }
+    int left = x - cols / 2;
+    if (left < 0) {
+        left = 0;
+    }
+    if (left > data->map_cols - cols) {
+        left = data->map_cols - cols;
+    }
+
+    int screen_top = (LINES - rows) / 2;
+    int screen_left = (COLS - cols) / 2;
+
+    for (int row = 0; row < rows; row++) {
+        for (int col = 0; col < cols; col++) {
+            char cell = data->map[top + row][left + col];
+            if (cell == '#' || cell == '|' || cell == '+') {
+                mvaddch(screen_top + row, screen_left + col, cell);
             }
         }
     }
-    mvaddstr(exit_y, exit_x - 1, "[>]");
-    mvaddch(y, x, bat);
+
+    int status_row = screen_top + rows;
+    if (status_row >= LINES) {
+        status_row = LINES - 1;
+    }
+    if (level == 4) {
+        mvaddstr(status_row, screen_left + 2, "Secret Level");
+    } else {
+        mvprintw(status_row, screen_left + 2, "Level %d/3", level);
+    }
+    if (data->moth_count > 0) {
+        printw(" | Moths %d/%d", collected, data->moth_count);
+        for (int i = 0; i < data->moth_count; i++) {
+            int row = data->moth[i].y - top;
+            int col = data->moth[i].x - left;
+            if (!data->moth[i].collected && row >= 0 && row < rows && col >= 0 && col < cols) {
+                mvaddch(screen_top + row, screen_left + col, '*');
+            }
+        }
+    }
+    int exit_row = data->exit_y - top;
+    int exit_col = data->exit_x - left;
+    if (exit_row >= 0 && exit_row < rows && exit_col >= 0 && exit_col < cols) {
+        if (exit_col == 0 || exit_col == cols - 1
+            || is_wall(data, data->exit_x - 1, data->exit_y)
+            || is_wall(data, data->exit_x + 1, data->exit_y)) {
+            mvaddch(screen_top + exit_row, screen_left + exit_col, '>');
+        } else {
+            mvaddstr(screen_top + exit_row, screen_left + exit_col - 1, "[>]");
+        }
+    }
+    mvaddch(screen_top + y - top, screen_left + x - left, bat);
     refresh();
 }
 
@@ -375,7 +436,7 @@ void win_screen(int level, bool has_next_level) {
     timeout(0);
 }
 
-GameInput read_input_key(void){
+GameInput read_input_key(void) {
     GameInput input;
 
     input.move_key = ERR;
@@ -386,7 +447,7 @@ GameInput read_input_key(void){
 
     int key = getch();
 
-    while(key != ERR){
+    while (key != ERR) {
         int direction = read_move_key(key);
 
         if(direction != ERR){
@@ -395,8 +456,8 @@ GameInput read_input_key(void){
         if(key == ' '){
             input.flip_key = key;
         }
-        if(key == 'r' || key == 'R'){
-            input.reset = key;
+        if (key == 'r' || key == 'R') {
+            input.reset = true;
         }
         if(key == 'q' || key == 'Q' || key == 27){
             input.quit = true;
@@ -408,7 +469,7 @@ GameInput read_input_key(void){
 
         key = getch();
     }
-    
+
     return input;
 }
 
@@ -425,66 +486,117 @@ int read_move_key(int key){
     return ERR;
 } 
 
-int move_player_x(int x, int key){
-    if ((key == 'a' || key == 'A' || key == KEY_LEFT) && x > 1){
-        x--;
-    } else if((key == 'd' || key == 'D' || key == KEY_RIGHT) && x < COLS - 2){
-        x++;
-    }   
+bool is_wall(const Levels *data, int x, int y) {
+    if (x < 1 || x >= data->map_cols - 1 || y < 1 || y >= data->map_rows - 1) {
+        return true;
+    }
+    return data->map[y][x] == '#';
+}
+
+int move_player_x(int x, int y, int key, const Levels *data) {
+    int next = x;
+    if (key == 'a' || key == 'A' || key == KEY_LEFT) {
+        next--;
+    } else if (key == 'd' || key == 'D' || key == KEY_RIGHT) {
+        next++;
+    }
+    if (!is_wall(data, next, y)) {
+        return next;
+    }
     return x;
 }
 
-int flip_gravity(int gravity, int key, int y){
-    if(y == LINES - 2 || y == 1){
-        if(key == ' '){
-            gravity = -gravity;           
+int flip_gravity(int gravity, int key, int x, int y, const Levels *data) {
+    if (is_wall(data, x, y + gravity)) {
+        if (key == ' ') {
+            gravity = -gravity;
         }
     }
     return gravity;
 }
 
-int move_player_y(int y, int gravity){
+int move_player_y(int x, int y, int gravity, const Levels *data) {
     int jump = y + gravity;
-    if(jump >= 1 && jump <= LINES - 2){
+    if (!is_wall(data, x, jump)) {
         y = jump;
     }
     return y;
 }
 
-Levels read_level(int number){
-    Levels level;
+Levels read_level(int number) {
+    Levels level = {0};
+    char filename[16];
 
-    level.start_x = 1;
-    level.start_y = LINES - 2;
-    level.exit_x = COLS / 2;
-    level.exit_y = LINES - 2;
-
-    if(number == 1){
-        level.exit_x = COLS - 3;
+    if (number < 1 || number > 4) {
+        return level;
     }
 
-    if(number == 2){
-        level.exit_x = COLS - 3;
-        level.exit_y = 1;
+    snprintf(filename, sizeof filename, "level%d.txt", number);
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        return level;
     }
 
-    if(number == 3){
-        level.start_y = 1;
-        level.exit_x = COLS - 3;
+    while (level.map_rows < 64) {
+        int row = level.map_rows;
+        if (fgets(level.map[row], sizeof level.map[0], file) == NULL) {
+            break;
+        }
+
+        int cols = (int)strcspn(level.map[row], "\r\n");
+        if (row == 0) {
+            level.map_cols = cols;
+        }
+        if (cols != level.map_cols) {
+            level.map_rows = 0;
+            break;
+        }
+        level.map_rows++;
+    }
+    fclose(file);
+
+    if (level.map_rows < 3 || level.map_cols < 3 || level.map[0][0] != '+') {
+        level.map_rows = 0;
+        return level;
     }
 
-    if(number == 4){
-        level.start_y = 1;
-        level.exit_x = COLS - 3;
+    int starts = 0;
+    int exits = 0;
+    for (int row = 1; row < level.map_rows - 1; row++) {
+        for (int col = 1; col < level.map_cols - 1; col++) {
+            char cell = level.map[row][col];
+            if (cell == 'S') {
+                level.start_x = col;
+                level.start_y = row;
+                starts++;
+            } else if (cell == 'E') {
+                level.exit_x = col;
+                level.exit_y = row;
+                exits++;
+            } else if (cell == '*') {
+                if (level.moth_count == MAX_MOTHS) {
+                    level.map_rows = 0;
+                    return level;
+                }
+
+                int i = level.moth_count;
+                level.moth[i].x = col;
+                level.moth[i].y = row;
+                level.moth_count++;
+            }
+        }
     }
 
+    if (starts != 1 || exits != 1) {
+        level.map_rows = 0;
+    }
     return level;
 }
 
-int moth_collected(Moth moth[], int x, int y){
+int moth_collected(Moth moth[], int moth_count, int x, int y) {
     int picked_up = 0;
 
-    for(int i = 0; i < 3; i++){
+    for(int i = 0; i < moth_count; i++){
         if(!moth[i].collected && moth[i].x == x && moth[i].y == y){
             moth[i].collected = true;
             picked_up++;
