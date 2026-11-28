@@ -149,7 +149,7 @@ bool load_start_screen(void) {
         mvaddstr(menu_y, menu_x + 2, "START");
         mvaddstr(menu_y + 1, menu_x + 2, "ABOUT GAME");
         mvaddstr(menu_y + 2, menu_x + 2, "EXIT");
-        mvaddstr(LINES - 1, 0, "Version: Beta 1.8.2");
+        mvaddstr(LINES - 1, 0, "Version: Beta 1.8.1");
         mvaddch(menu_y + selected, menu_x, '>');
         refresh();
 
